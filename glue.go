@@ -131,7 +131,9 @@ func NewApp(options ...Option) (_ App, err error) {
 	}
 
 	// initialize container
-	k.initContainer()
+	if err = k.initContainer(); err != nil {
+		return nil, err
+	}
 
 	// register bundles
 	if err = k.registerBundles(); err != nil {
@@ -158,7 +160,7 @@ func (k *app) Execute() (err error) {
 	var context = k.container.Build()
 	defer func() {
 		if err != nil {
-			context.Delete()
+			_ = context.Delete()
 			return
 		}
 
@@ -177,79 +179,79 @@ func (k *app) Execute() (err error) {
 }
 
 // initContainer initialize di container
-func (k *app) initContainer() {
-	k.container.Add(di.Def{
-		Name: DefCliRoot,
-		Build: func(ctn di.Container) (_ interface{}, err error) {
-			var registry Registry
-			if err = ctn.Fill(DefRegistry, &registry); err != nil {
-				return nil, err
-			}
-
-			var rootCmd = cobra.Command{
-				Use:           fmt.Sprintf("%s [command]", os.Args[0]), // TODO: replace to binary name
-				SilenceUsage:  true,
-				SilenceErrors: true,
-				PreRun: func(cmd *cobra.Command, args []string) {
-					registry.Set("cli.cmd", cmd)
-					registry.Set("cli.args", args)
-				},
-			}
-
-			// register commands by tag
-			for name, def := range ctn.Definitions() {
-				for _, tag := range def.Tags {
-					if tag.Name != TagCliCommand {
-						continue
-					}
-
-					var command *cobra.Command
-					if err = ctn.Fill(name, &command); err != nil {
-						return nil, err
-					}
-
-					rootCmd.AddCommand(command)
-					break
+func (k *app) initContainer() error {
+	return k.container.Add(
+		di.Def{
+			Name: DefCliRoot,
+			Build: func(ctn di.Container) (_ interface{}, err error) {
+				var registry Registry
+				if err = ctn.Fill(DefRegistry, &registry); err != nil {
+					return nil, err
 				}
-			}
 
-			// TODO: may be register flags by tag?
+				var rootCmd = cobra.Command{
+					Use:           fmt.Sprintf("%s [command]", os.Args[0]), // TODO: replace to binary name
+					SilenceUsage:  true,
+					SilenceErrors: true,
+					PreRun: func(cmd *cobra.Command, args []string) {
+						registry.Set("cli.cmd", cmd)
+						registry.Set("cli.args", args)
+					},
+				}
 
-			return &rootCmd, nil
+				// register commands by tag
+				for name, def := range ctn.Definitions() {
+					for _, tag := range def.Tags {
+						if tag.Name != TagCliCommand {
+							continue
+						}
+
+						var command *cobra.Command
+						if err = ctn.Fill(name, &command); err != nil {
+							return nil, err
+						}
+
+						rootCmd.AddCommand(command)
+						break
+					}
+				}
+
+				// TODO: may be register flags by tag?
+
+				return &rootCmd, nil
+			},
 		},
-	})
+		di.Def{
+			Name: DefCliVersion,
+			Tags: []di.Tag{{
+				Name: TagCliCommand,
+			}},
+			Build: func(ctn di.Container) (_ interface{}, err error) {
+				var p Registry
+				if err = ctn.Fill(DefRegistry, &p); err != nil {
+					return nil, err
+				}
 
-	k.container.Add(di.Def{
-		Name: DefCliVersion,
-		Tags: []di.Tag{{
-			Name: TagCliCommand,
-		}},
-		Build: func(ctn di.Container) (_ interface{}, err error) {
-			var p Registry
-			if err = ctn.Fill(DefRegistry, &p); err != nil {
-				return nil, err
-			}
-
-			return &cobra.Command{
-				Use:           "version",
-				Short:         "Application version",
-				SilenceUsage:  true,
-				SilenceErrors: true,
-				Run: func(cmd *cobra.Command, args []string) {
-					fmt.Println(
-						p.Get("app.version"),
-					)
-				},
-			}, nil
+				return &cobra.Command{
+					Use:           "version",
+					Short:         "Application version",
+					SilenceUsage:  true,
+					SilenceErrors: true,
+					Run: func(cmd *cobra.Command, args []string) {
+						fmt.Println(
+							p.Get("app.version"),
+						)
+					},
+				}, nil
+			},
 		},
-	})
-
-	k.container.Add(di.Def{
-		Name: DefRegistry,
-		Build: func(_ di.Container) (interface{}, error) {
-			return k.registry, nil
+		di.Def{
+			Name: DefRegistry,
+			Build: func(_ di.Container) (interface{}, error) {
+				return k.registry, nil
+			},
 		},
-	})
+	)
 }
 
 // registerBundles resolve bundles dependencies and register them.
