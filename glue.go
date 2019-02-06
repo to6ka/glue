@@ -75,6 +75,7 @@ const (
 	// TagCliCommand is tag to mark exported cli commands.
 	TagCliCommand = "cli.cmd"
 
+	// TagRootPersistentFlags is tag to mark FlagSet for add to root command persistent flags
 	TagRootPersistentFlags = "cli.persistentFlags"
 )
 
@@ -202,8 +203,6 @@ func (k *app) initContainer() error {
 					},
 				}
 
-				rootCmd.PersistentFlags()
-
 				// register commands by tag
 				for name, def := range ctn.Definitions() {
 					Tags:
@@ -227,8 +226,6 @@ func (k *app) initContainer() error {
 						}
 					}
 				}
-
-				// TODO: may be register flags by tag?
 
 				return &rootCmd, nil
 			},
