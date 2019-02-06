@@ -10,6 +10,7 @@ import (
 
 	"github.com/sarulabs/di"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 type (
@@ -73,6 +74,9 @@ const (
 
 	// TagCliCommand is tag to mark exported cli commands.
 	TagCliCommand = "cli.cmd"
+
+	// TagRootPersistentFlags is tag to mark FlagSet for add to root command persistent flags
+	TagRootPersistentFlags = "cli.persistent_flags"
 )
 
 // Bundles option.
@@ -201,22 +205,27 @@ func (k *app) initContainer() error {
 
 				// register commands by tag
 				for name, def := range ctn.Definitions() {
+					Tags:
 					for _, tag := range def.Tags {
-						if tag.Name != TagCliCommand {
-							continue
-						}
+						switch tag.Name {
+							case TagCliCommand:
+								var command *cobra.Command
+								if err = ctn.Fill(name, &command); err != nil {
+									return nil, err
+								}
 
-						var command *cobra.Command
-						if err = ctn.Fill(name, &command); err != nil {
-							return nil, err
+								rootCmd.AddCommand(command)
+								break Tags
+							case TagRootPersistentFlags:
+								var pf *pflag.FlagSet
+								if err = ctn.Fill(name, &pf); err != nil {
+									return nil, err
+								}
+								rootCmd.PersistentFlags().AddFlagSet(pf)
+								break Tags
 						}
-
-						rootCmd.AddCommand(command)
-						break
 					}
 				}
-
-				// TODO: may be register flags by tag?
 
 				return &rootCmd, nil
 			},
