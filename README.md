@@ -5,9 +5,10 @@ components of an application are bundles that are glued together using a depende
    
 ## Built-in Tags
 
-| Symbol        | Value     | Description         | 
-| ------------- | --------- | ------------------- |
-| TagCliCommand | cli.cmd   | Add a cli command   |
+| Symbol                 | Value                | Description                      | 
+| ---------------------- | -------------------- | -------------------------------- |
+| TagCliCommand          | cli.cmd              | Add a cli command                |
+| TagRootPersistentFlags | cli.persistent_flags | Add custom flags to root command |
 
 ## Built-in Services
 
