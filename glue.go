@@ -76,7 +76,7 @@ const (
 	TagCliCommand = "cli.cmd"
 
 	// TagRootPersistentFlags is tag to mark FlagSet for add to root command persistent flags
-	TagRootPersistentFlags = "cli.persistentFlags"
+	TagRootPersistentFlags = "cli.persistent_flags"
 )
 
 // Bundles option.
