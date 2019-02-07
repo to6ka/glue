@@ -197,7 +197,7 @@ func (k *app) initContainer() error {
 					Use:           fmt.Sprintf("%s [command]", os.Args[0]), // TODO: replace to binary name
 					SilenceUsage:  true,
 					SilenceErrors: true,
-					PreRun: func(cmd *cobra.Command, args []string) {
+					PersistentPreRun: func(cmd *cobra.Command, args []string) {
 						registry.Set("cli.cmd", cmd)
 						registry.Set("cli.args", args)
 					},
@@ -205,24 +205,24 @@ func (k *app) initContainer() error {
 
 				// register commands by tag
 				for name, def := range ctn.Definitions() {
-					Tags:
+				Tags:
 					for _, tag := range def.Tags {
 						switch tag.Name {
-							case TagCliCommand:
-								var command *cobra.Command
-								if err = ctn.Fill(name, &command); err != nil {
-									return nil, err
-								}
+						case TagCliCommand:
+							var command *cobra.Command
+							if err = ctn.Fill(name, &command); err != nil {
+								return nil, err
+							}
 
-								rootCmd.AddCommand(command)
-								break Tags
-							case TagRootPersistentFlags:
-								var pf *pflag.FlagSet
-								if err = ctn.Fill(name, &pf); err != nil {
-									return nil, err
-								}
-								rootCmd.PersistentFlags().AddFlagSet(pf)
-								break Tags
+							rootCmd.AddCommand(command)
+							break Tags
+						case TagRootPersistentFlags:
+							var pf *pflag.FlagSet
+							if err = ctn.Fill(name, &pf); err != nil {
+								return nil, err
+							}
+							rootCmd.PersistentFlags().AddFlagSet(pf)
+							break Tags
 						}
 					}
 				}
