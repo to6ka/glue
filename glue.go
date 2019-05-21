@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/sarulabs/di"
+	"github.com/sarulabs/di/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )

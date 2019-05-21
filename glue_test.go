@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/gozix/glue"
-	glueMock "github.com/gozix/glue/mock"
+	"github.com/gozix/glue/v2"
+	glueMock "github.com/gozix/glue/v2/mock"
 )
 
 func TestBundles(t *testing.T) {
