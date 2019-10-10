@@ -2,6 +2,7 @@ package glue_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -111,6 +112,22 @@ func TestBundles(t *testing.T) {
 
 		var _, err = glue.NewApp(
 			glue.Bundles(bundle),
+		)
+		assert.Error(t, err)
+	})
+}
+
+func TestContext(t *testing.T) {
+	t.Run("PositiveCase1", func(t *testing.T) {
+		var _, err = glue.NewApp(
+			glue.Context(context.Background()),
+		)
+		assert.Nil(t, err)
+	})
+
+	t.Run("NegativeCase1", func(t *testing.T) {
+		var _, err = glue.NewApp(
+			glue.Context(nil),
 		)
 		assert.Error(t, err)
 	})

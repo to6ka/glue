@@ -14,6 +14,7 @@ components of an application are bundles that are glued together using a depende
 
 | Symbol        | Value           | Description             | 
 | ------------- | --------------- | ----------------------- |
-| DefCliRoot    | cli.cmd.root    | Add root cli command    |
-| DefCliVersion | cli.cmd.version | Add version cli command |
+| DefCliRoot    | cli.cmd.root    | Cli root command        |
+| DefCliVersion | cli.cmd.version | Cli version command     |
+| DefContext    | context         | Current context         |
 | DefRegistry   | registry        | A key/value registry    |

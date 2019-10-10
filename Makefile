@@ -3,7 +3,7 @@ GO_TEST_COVERAGE_MODE ?= count
 GO_TEST_COVERAGE_FILE_NAME ?= coverage.out
 
 # Set a default `min_confidence` value for `golint`
-GO_LINT_MIN_CONFIDENCE ?= 0.2
+GO_LINT_MIN_CONFIDENCE ?= 0.8
 
 all: test
 

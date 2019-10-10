@@ -1,12 +1,14 @@
-// Package glue provide basic functionality.
 package glue
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
-	"reflect"
 	"sync"
+	"syscall"
 
 	"github.com/sarulabs/di"
 	"github.com/spf13/cobra"
@@ -36,30 +38,18 @@ type (
 		DependsOn() []string
 	}
 
-	// Registry interface.
-	Registry interface {
-		Get(name string) interface{}
-		Set(name string, value interface{})
-		Fill(name string, value interface{}) error
-	}
-
 	// app is implementation of App.
 	app struct {
-		mux       sync.Mutex
-		scopes    []string
-		bundles   map[string]Bundle
-		registry  Registry
-		container *di.Builder
+		ctx      context.Context
+		mux      sync.Mutex
+		scopes   []string
+		bundles  map[string]Bundle
+		builder  *di.Builder
+		registry Registry
 	}
 
 	// optionFunc wraps a func so it satisfies the Option interface.
 	optionFunc func(kernel *app) error
-
-	// registry is implementation of Registry.
-	registry struct {
-		mux    sync.RWMutex
-		values map[string]interface{}
-	}
 )
 
 const (
@@ -69,7 +59,11 @@ const (
 	// DefCliVersion is version command definition name.
 	DefCliVersion = "cli.cmd.version"
 
+	// DefContext is global context definition name.
+	DefContext = "context"
+
 	// DefRegistry is registry definition name.
+	// Deprecated: use Context instead of Registry. Will be removed in 3.0.
 	DefRegistry = "registry"
 
 	// TagCliCommand is tag to mark exported cli commands.
@@ -79,15 +73,30 @@ const (
 	TagRootPersistentFlags = "cli.persistent_flags"
 )
 
+// ErrNilContext is error triggered when detected nil context in option value.
+var ErrNilContext = errors.New("nil context")
+
+// Context option.
+func Context(ctx context.Context) Option {
+	return optionFunc(func(a *app) error {
+		if ctx == nil {
+			return ErrNilContext
+		}
+
+		a.ctx = ctx
+		return nil
+	})
+}
+
 // Bundles option.
 func Bundles(bundles ...Bundle) Option {
-	return optionFunc(func(k *app) error {
+	return optionFunc(func(a *app) error {
 		for _, bundle := range bundles {
-			if _, ok := k.bundles[bundle.Name()]; ok {
+			if _, ok := a.bundles[bundle.Name()]; ok {
 				return fmt.Errorf(`trying to register two bundles with the same name "%s"`, bundle.Name())
 			}
 
-			k.bundles[bundle.Name()] = bundle
+			a.bundles[bundle.Name()] = bundle
 		}
 
 		return nil
@@ -96,31 +105,27 @@ func Bundles(bundles ...Bundle) Option {
 
 // Scopes option.
 func Scopes(scopes ...string) Option {
-	return optionFunc(func(k *app) error {
-		k.scopes = scopes
+	return optionFunc(func(a *app) error {
+		a.scopes = scopes
 		return nil
 	})
 }
 
 // Version option.
 func Version(version string) Option {
-	return optionFunc(func(k *app) error {
-		k.registry.Set("app.version", version)
+	return optionFunc(func(a *app) error {
+		a.withValue("app.version", version)
 		return nil
 	})
 }
 
 // NewApp is app constructor.
 func NewApp(options ...Option) (_ App, err error) {
-	var (
-		p = registry{
-			values: make(map[string]interface{}),
-		}
-		a = app{
-			bundles:  make(map[string]Bundle, 8),
-			registry: &p,
-		}
-	)
+	var a = app{
+		ctx:      context.Background(),
+		bundles:  make(map[string]Bundle, 8),
+		registry: newRegistry(),
+	}
 
 	// apply options
 	for _, option := range options {
@@ -129,13 +134,13 @@ func NewApp(options ...Option) (_ App, err error) {
 		}
 	}
 
-	// create di container
-	if a.container, err = di.NewBuilder(a.scopes...); err != nil {
+	// create di builder
+	if a.builder, err = di.NewBuilder(a.scopes...); err != nil {
 		return nil, err
 	}
 
-	// initialize container
-	if err = a.initContainer(); err != nil {
+	// initialize builder
+	if err = a.initBuilder(); err != nil {
 		return nil, err
 	}
 
@@ -160,29 +165,47 @@ func (a *app) Execute() (err error) {
 
 	a.registry.Set("app.path", appPath)
 
+	// modify context
+	var cancelFunc = a.withCancel()
+	a.withValue("app.path", appPath)
+
 	// build container
-	var context = a.container.Build()
+	var container = a.builder.Build()
 	defer func() {
+		cancelFunc()
+
 		if err != nil {
-			_ = context.Delete()
+			_ = container.Delete()
 			return
 		}
 
-		err = context.Delete()
+		err = container.Delete()
+	}()
+
+	// wait signal, cancel execution context
+	var sigChan = make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-sigChan:
+			cancelFunc()
+		}
 	}()
 
 	// resolve cli root
 	var root *cobra.Command
-	if err = context.Fill(DefCliRoot, &root); err != nil {
+	if err = container.Fill(DefCliRoot, &root); err != nil {
 		return err
 	}
 
-	return root.Execute()
+	// TODO: Pass context, when PR will merged. See: https://github.com/spf13/cobra/pull/893
+	err = root.Execute()
+	return
 }
 
-// initContainer initialize di container
-func (a *app) initContainer() error {
-	return a.container.Add(
+// initBuilder initialize di builder
+func (a *app) initBuilder() error {
+	return a.builder.Add(
 		di.Def{
 			Name: DefCliRoot,
 			Build: func(ctn di.Container) (_ interface{}, err error) {
@@ -198,6 +221,8 @@ func (a *app) initContainer() error {
 					PersistentPreRun: func(cmd *cobra.Command, args []string) {
 						registry.Set("cli.cmd", cmd)
 						registry.Set("cli.args", args)
+						a.withValue("cli.cmd", cmd)
+						a.withValue("cli.args", args)
 					},
 				}
 
@@ -235,8 +260,8 @@ func (a *app) initContainer() error {
 				Name: TagCliCommand,
 			}},
 			Build: func(ctn di.Container) (_ interface{}, err error) {
-				var p Registry
-				if err = ctn.Fill(DefRegistry, &p); err != nil {
+				var ctx context.Context
+				if err = ctn.Fill(DefContext, &ctx); err != nil {
 					return nil, err
 				}
 
@@ -246,12 +271,19 @@ func (a *app) initContainer() error {
 					SilenceUsage:  true,
 					SilenceErrors: true,
 					Run: func(cmd *cobra.Command, args []string) {
-						fmt.Println(
-							p.Get("app.version"),
-						)
+						if v, ok := ctx.Value("app.version").(string); ok {
+							fmt.Println(v)
+						}
 					},
 				}, nil
 			},
+		},
+		di.Def{
+			Name: DefContext,
+			Build: func(_ di.Container) (interface{}, error) {
+				return a.ctx, nil
+			},
+			Unshared: true,
 		},
 		di.Def{
 			Name: DefRegistry,
@@ -278,7 +310,7 @@ func (a *app) registerBundles() (err error) {
 
 	// register
 	for _, name := range resolved {
-		if err = a.bundles[name].Build(a.container); err != nil {
+		if err = a.bundles[name].Build(a.builder); err != nil {
 			return err
 		}
 	}
@@ -325,39 +357,19 @@ func (a *app) resolveDependencies(bundle Bundle, resolved *[]string, unresolved 
 	return nil
 }
 
+// withCancel append cancellation to current context. Method is non thread safe.
+func (a *app) withCancel() (fn context.CancelFunc) {
+	a.ctx, fn = context.WithCancel(a.ctx)
+	return fn
+}
+
+// withValue append any value to current context. Method is non thread safe.
+func (a *app) withValue(key, value interface{}) context.Context {
+	a.ctx = context.WithValue(a.ctx, key, value)
+	return a.ctx
+}
+
 // apply implements Option.
 func (f optionFunc) apply(kernel *app) error {
 	return f(kernel)
-}
-
-// Get implements Registry.
-func (p *registry) Get(name string) interface{} {
-	p.mux.RLock()
-	defer p.mux.RUnlock()
-
-	return p.values[name]
-}
-
-// Set implements Registry.
-func (p *registry) Set(name string, value interface{}) {
-	p.mux.Lock()
-	defer p.mux.Unlock()
-
-	p.values[name] = value
-}
-
-// Fill implements Registry.
-func (p *registry) Fill(name string, target interface{}) (err error) {
-	var src interface{}
-	defer func() {
-		if r := recover(); r != nil {
-			t := reflect.TypeOf(target)
-			s := reflect.TypeOf(src)
-			err = fmt.Errorf("target is `%s` but should be a pointer to the source type `%s`", t, s)
-		}
-	}()
-
-	src = p.Get(name)
-	reflect.ValueOf(target).Elem().Set(reflect.ValueOf(src))
-	return
 }
