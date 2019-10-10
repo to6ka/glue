@@ -116,7 +116,7 @@ func NewApp(options ...Option) (_ App, err error) {
 		p = registry{
 			values: make(map[string]interface{}),
 		}
-		k = app{
+		a = app{
 			bundles:  make(map[string]Bundle, 8),
 			registry: &p,
 		}
@@ -124,33 +124,33 @@ func NewApp(options ...Option) (_ App, err error) {
 
 	// apply options
 	for _, option := range options {
-		if err = option.apply(&k); err != nil {
+		if err = option.apply(&a); err != nil {
 			return nil, err
 		}
 	}
 
 	// create di container
-	if k.container, err = di.NewBuilder(k.scopes...); err != nil {
+	if a.container, err = di.NewBuilder(a.scopes...); err != nil {
 		return nil, err
 	}
 
 	// initialize container
-	if err = k.initContainer(); err != nil {
+	if err = a.initContainer(); err != nil {
 		return nil, err
 	}
 
 	// register bundles
-	if err = k.registerBundles(); err != nil {
+	if err = a.registerBundles(); err != nil {
 		return nil, err
 	}
 
-	return &k, nil
+	return &a, nil
 }
 
 // Execute implementation.
-func (k *app) Execute() (err error) {
-	k.mux.Lock()
-	defer k.mux.Unlock()
+func (a *app) Execute() (err error) {
+	a.mux.Lock()
+	defer a.mux.Unlock()
 
 	// app.path
 	var appPath string
@@ -158,10 +158,10 @@ func (k *app) Execute() (err error) {
 		return err
 	}
 
-	k.registry.Set("app.path", appPath)
+	a.registry.Set("app.path", appPath)
 
 	// build container
-	var context = k.container.Build()
+	var context = a.container.Build()
 	defer func() {
 		if err != nil {
 			_ = context.Delete()
@@ -177,14 +177,12 @@ func (k *app) Execute() (err error) {
 		return err
 	}
 
-	// run cli root
-	err = root.Execute()
-	return err
+	return root.Execute()
 }
 
 // initContainer initialize di container
-func (k *app) initContainer() error {
-	return k.container.Add(
+func (a *app) initContainer() error {
+	return a.container.Add(
 		di.Def{
 			Name: DefCliRoot,
 			Build: func(ctn di.Container) (_ interface{}, err error) {
@@ -221,6 +219,7 @@ func (k *app) initContainer() error {
 							if err = ctn.Fill(name, &pf); err != nil {
 								return nil, err
 							}
+
 							rootCmd.PersistentFlags().AddFlagSet(pf)
 							break Tags
 						}
@@ -257,29 +256,29 @@ func (k *app) initContainer() error {
 		di.Def{
 			Name: DefRegistry,
 			Build: func(_ di.Container) (interface{}, error) {
-				return k.registry, nil
+				return a.registry, nil
 			},
 		},
 	)
 }
 
 // registerBundles resolve bundles dependencies and register them.
-func (k *app) registerBundles() (err error) {
+func (a *app) registerBundles() (err error) {
 	// resolve dependencies
 	var (
-		resolved   = make([]string, 0, len(k.bundles))
-		unresolved = make([]string, 0, len(k.bundles))
+		resolved   = make([]string, 0, len(a.bundles))
+		unresolved = make([]string, 0, len(a.bundles))
 	)
 
-	for _, bundle := range k.bundles {
-		if err = k.resolveDependencies(bundle, &resolved, &unresolved); err != nil {
+	for _, bundle := range a.bundles {
+		if err = a.resolveDependencies(bundle, &resolved, &unresolved); err != nil {
 			return err
 		}
 	}
 
 	// register
 	for _, name := range resolved {
-		if err = k.bundles[name].Build(k.container); err != nil {
+		if err = a.bundles[name].Build(a.container); err != nil {
 			return err
 		}
 	}
@@ -288,12 +287,13 @@ func (k *app) registerBundles() (err error) {
 }
 
 // dependencies generate dependencies graph.
-func (k *app) resolveDependencies(bundle Bundle, resolved *[]string, unresolved *[]string) (err error) {
+func (a *app) resolveDependencies(bundle Bundle, resolved *[]string, unresolved *[]string) (err error) {
 	for _, name := range *unresolved {
 		if bundle.Name() == name {
 			return fmt.Errorf(`"%s" has circular dependency of itself`, bundle.Name())
 		}
 	}
+
 	*unresolved = append(*unresolved, bundle.Name())
 
 	if v, ok := bundle.(BundleDependsOn); ok {
@@ -302,11 +302,11 @@ func (k *app) resolveDependencies(bundle Bundle, resolved *[]string, unresolved 
 				return fmt.Errorf(`"%s" can not depends on itself`, v.Name())
 			}
 
-			if _, ok := k.bundles[name]; !ok {
+			if _, ok := a.bundles[name]; !ok {
 				return fmt.Errorf(`"%s" has unresoled dependency "%s"`, v.Name(), name)
 			}
 
-			if err = k.resolveDependencies(k.bundles[name], resolved, unresolved); err != nil {
+			if err = a.resolveDependencies(a.bundles[name], resolved, unresolved); err != nil {
 				return err
 			}
 		}
@@ -319,6 +319,7 @@ func (k *app) resolveDependencies(bundle Bundle, resolved *[]string, unresolved 
 			return nil
 		}
 	}
+
 	*resolved = append(*resolved, bundle.Name())
 
 	return nil
