@@ -198,8 +198,7 @@ func (a *app) Execute() (err error) {
 		return err
 	}
 
-	// TODO: Pass context, when PR will merged. See: https://github.com/spf13/cobra/pull/893
-	err = root.Execute()
+	err = root.ExecuteContext(a.ctx)
 	return
 }
 
