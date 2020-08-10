@@ -38,6 +38,11 @@ type (
 		DependsOn() []string
 	}
 
+	// PreRunner is a persistent prerunner interface.
+	PreRunner interface {
+		Run() error
+	}
+
 	// app is implementation of App.
 	app struct {
 		ctx      context.Context
@@ -71,6 +76,9 @@ const (
 
 	// TagRootPersistentFlags is tag to mark FlagSet for add to root command persistent flags
 	TagRootPersistentFlags = "cli.persistent_flags"
+
+	// TagRootPersistentPreRunner is tag to mark persistent prerunners
+	TagRootPersistentPreRunner = "cli.persistent_prerunner"
 )
 
 // ErrNilContext is error triggered when detected nil context in option value.
@@ -217,11 +225,25 @@ func (a *app) initBuilder() error {
 					Use:           fmt.Sprintf("%s [command]", os.Args[0]), // TODO: replace to binary name
 					SilenceUsage:  true,
 					SilenceErrors: true,
-					PersistentPreRun: func(cmd *cobra.Command, args []string) {
+					PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 						registry.Set("cli.cmd", cmd)
 						registry.Set("cli.args", args)
 						a.withValue("cli.cmd", cmd)
 						a.withValue("cli.args", args)
+
+						for name, def := range ctn.Definitions() {
+							for _, tag := range def.Tags {
+								if tag.Name != TagRootPersistentPreRunner {
+									continue
+								}
+								if err = ctn.Get(name).(PreRunner).Run(); err != nil {
+									return err
+								}
+								break
+							}
+						}
+
+						return nil
 					},
 				}
 
