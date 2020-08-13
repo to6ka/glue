@@ -40,7 +40,7 @@ type (
 
 	// PreRunner is a persistent prerunner interface.
 	PreRunner interface {
-		Run() error
+		Run(ctx context.Context) error
 	}
 
 	// app is implementation of App.
@@ -236,7 +236,7 @@ func (a *app) initBuilder() error {
 								if tag.Name != TagRootPersistentPreRunner {
 									continue
 								}
-								if err = ctn.Get(name).(PreRunner).Run(); err != nil {
+								if err = ctn.Get(name).(PreRunner).Run(a.ctx); err != nil {
 									return err
 								}
 								break
