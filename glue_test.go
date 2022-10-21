@@ -1,3 +1,7 @@
+// Copyright 2018 Sergey Novichkov. All rights reserved.
+// For the full copyright and license information, please view the LICENSE
+// file that was distributed with this source code.
+
 package glue_test
 
 import (
@@ -12,8 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/gozix/glue/v2"
-	glueMock "github.com/gozix/glue/v2/mock"
+	"github.com/gozix/glue/v3"
+	glueMock "github.com/gozix/glue/v3/mock"
 )
 
 func TestBundles(t *testing.T) {
@@ -128,22 +132,6 @@ func TestContext(t *testing.T) {
 	t.Run("NegativeCase1", func(t *testing.T) {
 		var _, err = glue.NewApp(
 			glue.Context(nil),
-		)
-		assert.Error(t, err)
-	})
-}
-
-func TestScopes(t *testing.T) {
-	t.Run("PositiveCase1", func(t *testing.T) {
-		var _, err = glue.NewApp(
-			glue.Scopes("a", "b"),
-		)
-		assert.Nil(t, err)
-	})
-
-	t.Run("NegativeCase1", func(t *testing.T) {
-		var _, err = glue.NewApp(
-			glue.Scopes("a", "a"),
 		)
 		assert.Error(t, err)
 	})
