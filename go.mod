@@ -1,4 +1,4 @@
-module github.com/gozix/glue/v3
+module github.com/to6ka/glue/v3
 
 go 1.18
 

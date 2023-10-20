@@ -1,15 +1,15 @@
 # GoZix Glue
 
 [documentation-img]: https://img.shields.io/badge/godoc-reference-blue.svg?color=24B898&style=for-the-badge&logo=go&logoColor=ffffff
-[documentation-url]: https://pkg.go.dev/github.com/gozix/glue/v3
+[documentation-url]: https://pkg.go.dev/github.com/to6ka/glue/v3
 [license-img]: https://img.shields.io/github/license/gozix/glue.svg?style=for-the-badge
-[license-url]: https://github.com/gozix/glue/blob/master/LICENSE
+[license-url]: https://github.com/to6ka/glue/blob/master/LICENSE
 [release-img]: https://img.shields.io/github/tag/gozix/glue.svg?label=release&color=24B898&logo=github&style=for-the-badge
-[release-url]: https://github.com/gozix/glue/releases/latest
+[release-url]: https://github.com/to6ka/glue/releases/latest
 [build-status-img]: https://img.shields.io/github/actions/workflow/status/gozix/glue/go.yml?logo=github&style=for-the-badge
-[build-status-url]: https://github.com/gozix/glue/actions
+[build-status-url]: https://github.com/to6ka/glue/actions
 [go-report-img]: https://img.shields.io/badge/go%20report-A%2B-green?style=for-the-badge
-[go-report-url]: https://goreportcard.com/report/github.com/gozix/glue
+[go-report-url]: https://goreportcard.com/report/github.com/to6ka/glue
 [code-coverage-img]: https://img.shields.io/codecov/c/github/gozix/glue.svg?style=for-the-badge&logo=codecov
 [code-coverage-url]: https://codecov.io/gh/gozix/glue
 
@@ -27,7 +27,7 @@ components of an application are bundles that are glued together using a depende
 ## Installation
 
 ```shell
-go get github.com/gozix/glue/v3
+go get github.com/to6ka/glue/v3
 ```
 
 ## Documentation

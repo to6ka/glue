@@ -26,6 +26,12 @@ type (
 		Execute() error
 	}
 
+	InternalApp interface {
+		Container() di.Container
+		Run() error
+		Stop()
+	}
+
 	// Option interface.
 	Option interface {
 		apply(kernel *app) error
@@ -53,10 +59,12 @@ type (
 
 	// app is implementation of App.
 	app struct {
-		ctx     context.Context
-		mux     sync.Mutex
-		bundles map[string]Bundle
-		builder di.Builder
+		ctx       context.Context
+		cancel    context.CancelFunc
+		mux       sync.Mutex
+		bundles   map[string]Bundle
+		builder   di.Builder
+		container di.Container
 	}
 
 	// optionFunc wraps a func, so it satisfies the Option interface.
@@ -105,14 +113,22 @@ func Version(version string) Option {
 	})
 }
 
-// NewApp is app constructor.
-func NewApp(options ...Option) (_ App, err error) {
+func NewApp(options ...Option) (App, error) {
+	return newApp(options...)
+}
+
+func NewInternalApp(options ...Option) (InternalApp, error) {
+	return newApp(options...)
+}
+
+func newApp(options ...Option) (*app, error) {
 	var a = app{
 		ctx:     context.Background(),
 		bundles: make(map[string]Bundle, 8),
 	}
 
 	// apply options
+	var err error
 	for _, option := range options {
 		if err = option.apply(&a); err != nil {
 			return nil, err
@@ -137,6 +153,25 @@ func (a *app) Execute() (err error) {
 	a.mux.Lock()
 	defer a.mux.Unlock()
 
+	// wait signal, cancel execution context
+	var sigChan = make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		a.Stop()
+	}()
+
+	return a.run()
+}
+
+func (a *app) Run() (err error) {
+	a.mux.Lock()
+	defer a.mux.Unlock()
+
+	return a.run()
+}
+
+func (a *app) run() (err error) {
 	// app.path
 	var appPath string
 	if appPath, err = filepath.Abs(filepath.Dir(os.Args[0])); err != nil {
@@ -144,44 +179,42 @@ func (a *app) Execute() (err error) {
 	}
 
 	// modify context
-	var cancelFunc = a.withCancel()
+	a.withCancel()
 	a.withValue("app.path", appPath)
 
 	// build container
-	var container di.Container
-	if container, err = a.builder.Build(); err != nil {
+	a.container, err = a.builder.Build()
+	if err != nil {
 		return err
 	}
 
 	defer func() {
-		cancelFunc()
+		a.Stop()
 
 		if err != nil {
-			_ = container.Close()
+			_ = a.container.Close()
 			return
 		}
 
-		err = container.Close()
-	}()
-
-	// wait signal, cancel execution context
-	var sigChan = make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		select {
-		case <-sigChan:
-			cancelFunc()
-		}
+		err = a.container.Close()
 	}()
 
 	// resolve cli root
 	var root *cobra.Command
-	if err = container.Resolve(&root, withRootCommand()); err != nil {
+	if err = a.container.Resolve(&root, withRootCommand()); err != nil {
 		return err
 	}
 
 	err = root.ExecuteContext(a.ctx)
 	return
+}
+
+func (a *app) Stop() {
+	a.cancel()
+}
+
+func (a *app) Container() di.Container {
+	return a.container
 }
 
 // builder initialize di builder
@@ -311,9 +344,8 @@ func (a *app) resolveDependencies(bundle Bundle, resolved *[]string, unresolved 
 }
 
 // withCancel append cancellation to current context. Method is non thread safe.
-func (a *app) withCancel() (fn context.CancelFunc) {
-	a.ctx, fn = context.WithCancel(a.ctx)
-	return fn
+func (a *app) withCancel() {
+	a.ctx, a.cancel = context.WithCancel(a.ctx)
 }
 
 // withValue append any value to current context. Method is non thread safe.
