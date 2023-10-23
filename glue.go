@@ -28,6 +28,7 @@ type (
 
 	InternalApp interface {
 		Container() di.Container
+		Init() error
 		Run() error
 		Stop()
 	}
@@ -149,7 +150,7 @@ func newApp(options ...Option) (*app, error) {
 }
 
 // Execute implementation.
-func (a *app) Execute() (err error) {
+func (a *app) Execute() error {
 	a.mux.Lock()
 	defer a.mux.Unlock()
 
@@ -161,20 +162,25 @@ func (a *app) Execute() (err error) {
 		a.Stop()
 	}()
 
+	err := a.init()
+	if err != nil {
+		return err
+	}
+
 	return a.run()
 }
 
-func (a *app) Run() (err error) {
+func (a *app) Init() error {
 	a.mux.Lock()
 	defer a.mux.Unlock()
 
-	return a.run()
+	return a.init()
 }
 
-func (a *app) run() (err error) {
+func (a *app) init() error {
 	// app.path
-	var appPath string
-	if appPath, err = filepath.Abs(filepath.Dir(os.Args[0])); err != nil {
+	appPath, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
 		return fmt.Errorf("unable resolve app.path : %w", err)
 	}
 
@@ -188,6 +194,17 @@ func (a *app) run() (err error) {
 		return err
 	}
 
+	return nil
+}
+
+func (a *app) Run() error {
+	a.mux.Lock()
+	defer a.mux.Unlock()
+
+	return a.run()
+}
+
+func (a *app) run() (err error) {
 	defer func() {
 		a.Stop()
 
@@ -205,8 +222,7 @@ func (a *app) run() (err error) {
 		return err
 	}
 
-	err = root.ExecuteContext(a.ctx)
-	return
+	return root.ExecuteContext(a.ctx)
 }
 
 func (a *app) Stop() {
